@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgriPredict - AI Crop Yield</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- QRCode JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+    <!-- Interactive Canvas Background -->
+    <canvas id="bgCanvas" class="bg-layer"></canvas>
+
+    <div class="app-wrapper" id="printable-area">
+        <!-- Print Only Header -->
+        <div id="print-header" class="print-doc-header">
+            <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 15px;">
+                <img src="/static/logo.png" style="height: 60px; width: auto; margin-right: 15px; display: block !important;">
+                <h2 class="doc-title" style="margin: 0; border: none; padding: 0;">AGRIPREDICT YIELD ANALYSIS</h2>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div class="print-left">
+                    <h1 id="print-farmer-name">Farmer Name</h1>
+                    <p><strong>Contact:</strong> <span id="print-farmer-contact">--</span></p>
+                    <p><strong>Address:</strong> <span id="print-farmer-address">--</span></p>
+                    <div class="print-meta">
+                        <span>Report ID: <span id="print-report-id">AP-10492</span></span> &nbsp;|&nbsp; 
+                        <span>Date: <span id="print-date"></span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <main class="immersive-dashboard">
+            <!-- Left Panel: Header + Inputs -->
+            <section class="floating-panel input-panel">
+                <header class="app-header">
+                    <div class="brand">
+                        <img src="{{ url_for('static', filename='logo.png') }}" alt="AgriPredict" class="brand-logo" onerror="this.style.display='none'; document.getElementById('fallback-icon').style.display='inline-block';">
+                        <i class="fa-solid fa-seedling brand-icon" id="fallback-icon" style="display:none;"></i>
+                        <h1>AgriPredict</h1>
+                    </div>
+                    <p class="subtitle">AI Based Crop Yield Predictor</p>
+                </header>
+
+                <form id="prediction-form">
+                    <!-- Farmer Details -->
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="farmer-name"><i class="fa-solid fa-user"></i> Farmer</label>
+                            <input type="text" id="farmer-name" placeholder="e.g. Ramesh">
+                        </div>
+                        <div class="form-group">
+                            <label for="farmer-contact"><i class="fa-solid fa-phone"></i> Contact</label>
+                            <input type="text" id="farmer-contact" placeholder="e.g. +91...">
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-top: -5px; position: relative;">
+                        <label for="farmer-address"><i class="fa-solid fa-map-pin"></i> Village / Address</label>
+                        <input type="text" id="farmer-address" placeholder="e.g. Kondapur, Hyderabad" style="padding-right: 45px;">
+                        <button type="button" onclick="fetchLocation()" class="gps-btn" title="Use Current Location">
+                            <i class="fa-solid fa-location-crosshairs"></i>
+                        </button>
+                    </div>
+
+                    <div style="height: 1px; background: var(--card-border); margin: 0 0 15px 0;"></div>
+                    
+                    <div class="form-group" style="margin-bottom: 1.5rem;">
+                        <label for="farming-season"><i class="fa-solid fa-cloud-sun"></i> Season</label>
+                        <select id="farming-season" onchange="adjustSeasonWeather()">
+                            <option value="Monsoon">Monsoon</option>
+                            <option value="Winter">Winter</option>
+                            <option value="Summer">Summer</option>
+                            <option value="Spring">Spring</option>
+                        </select>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="rainfall"><i class="fa-solid fa-cloud-rain"></i> Rain (mm)</label>
+                            <input type="number" id="rainfall" min="0" max="2000" step="10" value="900">
+                        </div>
+                        <div class="form-group">
+                            <label for="temperature"><i class="fa-solid fa-temperature-half"></i> Temp (°C)</label>
+                            <input type="number" id="temperature" min="0" max="50" step="0.5" value="25.0">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="soil-npk"><i class="fa-solid fa-seedling"></i> Soil NPK</label>
+                            <input type="number" id="soil-npk" placeholder="e.g. 65">
+                        </div>
+                        <div class="form-group">
+                            <label for="land-area"><i class="fa-solid fa-map"></i> Acres</label>
+                            <input type="number" id="land-area" placeholder="e.g. 1.0" step="0.1" value="1.0">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 1.5rem;">
+                        <label for="soil-report"><i class="fa-solid fa-file-arrow-up"></i> Upload Soil / Water Report (Optional)</label>
+                        <input type="file" id="soil-report" accept=".pdf,.jpg,.png" style="padding: 0.8rem; font-size: 0.9rem; background: transparent;">
+                    </div>
+
+                    <div class="form-group-select">
+                        <label for="focus-crop">Focus Crop</label>
+                        <select id="focus-crop">
+                            <optgroup label="Cereals & Millets">
+                                <option value="Rice">Rice</option>
+                                <option value="Wheat">Wheat</option>
+                                <option value="Maize">Maize</option>
+                                <option value="Jowar (Sorghum)">Jowar (Sorghum)</option>
+                                <option value="Bajra (Pearl Millet)">Bajra (Pearl Millet)</option>
+                                <option value="Ragi (Finger Millet)">Ragi (Finger Millet)</option>
+                            </optgroup>
+                            <optgroup label="Pulses & Beans">
+                                <option value="Gram (Chickpea)">Gram (Chickpea)</option>
+                                <option value="Tur / Arhar (Pigeon Pea)">Tur / Arhar (Pigeon Pea)</option>
+                                <option value="Moong (Green Gram)">Moong (Green Gram)</option>
+                                <option value="Urad (Black Gram)">Urad (Black Gram)</option>
+                                <option value="Soybean">Soybean</option>
+                                <option value="Rajma (Kidney Beans)">Rajma (Kidney Beans)</option>
+                            </optgroup>
+                            <optgroup label="Vegetables">
+                                <option value="Potato">Potato</option>
+                                <option value="Onion">Onion</option>
+                                <option value="Tomato">Tomato</option>
+                                <option value="Brinjal (Eggplant)">Brinjal (Eggplant)</option>
+                                <option value="Cabbage">Cabbage</option>
+                                <option value="Cauliflower">Cauliflower</option>
+                                <option value="Okra (Bhindi)">Okra (Bhindi)</option>
+                                <option value="Spinach (Palak)">Spinach (Palak)</option>
+                                <option value="Bottle Gourd">Bottle Gourd</option>
+                                <option value="Bitter Gourd">Bitter Gourd</option>
+                                <option value="Carrot">Carrot</option>
+                                <option value="Radish">Radish</option>
+                            </optgroup>
+                            <optgroup label="Cash & Commercial Crops">
+                                <option value="Cotton">Cotton</option>
+                                <option value="Sugarcane">Sugarcane</option>
+                                <option value="Jute">Jute</option>
+                                <option value="Tobacco">Tobacco</option>
+                                <option value="Mustard (Oilseed)">Mustard (Oilseed)</option>
+                                <option value="Groundnut">Groundnut</option>
+                                <option value="Sunflower">Sunflower</option>
+                            </optgroup>
+                            <optgroup label="Spices & Plantation">
+                                <option value="Tea">Tea</option>
+                                <option value="Coffee">Coffee</option>
+                                <option value="Turmeric">Turmeric</option>
+                                <option value="Ginger">Ginger</option>
+                                <option value="Garlic">Garlic</option>
+                                <option value="Chilli">Chilli</option>
+                                <option value="Coriander">Coriander</option>
+                            </optgroup>
+                            <optgroup label="Fruits & Exotic">
+                                <option value="Mango">Mango</option>
+                                <option value="Banana">Banana</option>
+                                <option value="Papaya">Papaya</option>
+                                <option value="Dragon Fruit">Dragon Fruit</option>
+                                <option value="Quinoa">Quinoa</option>
+                                <option value="Chia Seeds">Chia Seeds</option>
+                            </optgroup>
+                        </select>
+
+                    </div>
+                    <button type="submit" class="btn-primary" id="run-btn">
+                        <span>Analyze Field</span>
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                    <div class="actions">
+                        <button type="button" class="btn-secondary" onclick="resetDashboard()">
+                            <i class="fa-solid fa-rotate-left"></i> Start Over
+                        </button>
+                        <button type="button" class="btn-secondary" onclick="window.print()">
+                            <i class="fa-solid fa-print"></i> Print Report
+                        </button>
+                        <button type="button" class="btn-secondary" onclick="downloadPDF()">
+                            <i class="fa-solid fa-file-pdf"></i> Download PDF
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Pre-Analysis Dashboard: Visible on load -->
+            <section class="floating-panel welcome-hub" id="welcome-hub">
+                <div class="hub-header">
+                    <h2><i class="fa-solid fa-seedling"></i> Welcome to AgriPredict</h2>
+                    <p>Your intelligent assistant for maximizing crop yield.</p>
+                </div>
+                
+                <div class="hub-grid">
+                    <div class="reference-section" id="history-section">
+                        <h3><i class="fa-solid fa-clock-rotate-left"></i> Past Analysis History</h3>
+                        <p class="hub-desc">Your recent field scenarios are securely stored locally.</p>
+                        
+                        <div id="history-list" class="history-list">
+                            <!-- Populated by JS -->
+                            <div class="history-empty">No past analysis found. Run your first analysis on the left!</div>
+                        </div>
+                    </div>
+
+                    <div class="reference-section">
+                        <h3><i class="fa-solid fa-location-dot"></i> Regional Weather Fetcher</h3>
+                        <p class="hub-desc">Enter a 6-digit Pincode to auto-load local climate data.</p>
+                        
+                        <div class="pincode-fetcher">
+                            <input type="text" id="pincode-input" placeholder="Pincode (e.g. 560001)" maxlength="6">
+                            <button type="button" onclick="fetchWeatherByPincode()" title="Fetch Climate Data">
+                                <i class="fa-solid fa-cloud-arrow-down"></i>
+                            </button>
+                        </div>
+                        <div id="pincode-result" class="pincode-result"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right section: Floating Result Cards -->
+            <section class="results-area" id="results-area" style="display: none;">
+                
+                <div class="results-grid">
+                    <!-- Main KPI Overlay -->
+                    <div class="floating-panel hero-kpi">
+                        <div class="kpi-group">
+                            <h3>Yield</h3>
+                            <div class="kpi-value" id="kpi-yield">0 <span>kg/ha</span></div>
+                        </div>
+                        <div class="kpi-group">
+                            <h3>Category</h3>
+                            <div class="kpi-value category" id="kpi-cat">--</div>
+                        </div>
+                        <div class="kpi-group" style="display: none;">
+                            <h3>Suitability</h3>
+                            <div class="kpi-value" id="kpi-suit">0<span>%</span></div>
+                        </div>
+                        <div class="kpi-group">
+                            <h3>Est. Cost</h3>
+                            <div class="kpi-value" id="kpi-cost" style="color: #e74c3c;">₹0</div>
+                        </div>
+                        <div class="kpi-group" style="border-right: none;">
+                            <h3>Est. Profit</h3>
+                            <div class="kpi-value" id="kpi-profit" style="color: #27ae60;">₹0</div>
+                        </div>
+                    </div>
+
+                    <!-- Mentor Note -->
+                    <div class="floating-panel mentor-note">
+                        <div class="note-icon"><i class="fa-solid fa-lightbulb"></i></div>
+                        <div class="note-content">
+                            <h4>GUIDANCE</h4>
+                            <p id="mentor-advice">Awaiting analysis...</p>
+                        </div>
+                    </div>
+
+                    <!-- Advanced Data Tabs -->
+                    <div class="floating-panel data-panel">
+                        <div class="tabs">
+                            <button class="tab-btn active" onclick="switchTab('care')">Care Guide</button>
+                            <button class="tab-btn" onclick="switchTab('comparison')">Comparison</button>
+                            <button class="tab-btn" onclick="switchTab('scenarios')">Scenarios</button>
+                            <button class="tab-btn" onclick="switchTab('tasks')">Tasks</button>
+                        </div>
+
+                        <div class="tab-content active" id="tab-care">
+                            <div class="care-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                                <div class="care-card" style="background: var(--input-bg); border: 1px solid var(--card-border); padding: 15px; border-radius: 8px;">
+                                    <h4 style="margin-bottom: 10px; color: var(--text-main);"><i class="fa-solid fa-sack-xmark"></i> Fertilizer Plan</h4>
+                                    <div id="fert-content" style="font-size: 0.95rem; line-height: 1.6; color: var(--text-muted);">Awaiting analysis...</div>
+                                </div>
+                                <div class="care-card" style="background: var(--input-bg); border: 1px solid var(--card-border); padding: 15px; border-radius: 8px;">
+                                    <h4 style="margin-bottom: 10px; color: var(--text-main);"><i class="fa-solid fa-droplet"></i> Irrigation Schedule</h4>
+                                    <div id="irrig-content" style="font-size: 0.95rem; line-height: 1.6; color: var(--text-muted);">Awaiting analysis...</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="tab-content" id="tab-comparison">
+                            <div class="crop-grid" id="crop-grid-container">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+
+                        <div class="tab-content" id="tab-scenarios">
+                            <div class="scenario-list">
+                                <div class="scenario-card current">
+                                    <div class="sc-header">Current Setup</div>
+                                    <div class="val"><span id="sc-curr">0</span> <small>kg/ha</small></div>
+                                </div>
+                                <div class="scenario-card warning">
+                                    <div class="sc-header">Dry Spell <small>(-250mm)</small></div>
+                                    <div class="val"><span id="sc-dry">0</span> <small>kg/ha</small></div>
+                                </div>
+                                <div class="scenario-card success">
+                                    <div class="sc-header">Optimal <small>(+Rain/Nutrients)</small></div>
+                                    <div class="val"><span id="sc-opt">0</span> <small>kg/ha</small></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="tab-content" id="tab-tasks">
+                            <ul class="task-list" id="task-list">
+                                <!-- Tasks injected via JS -->
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+        
+        <!-- Print Footer (QR Code) -->
+        <div class="print-doc-footer">
+            <div id="qrcode"></div>
+            <p>Scan for Official Digital Copy</p>
+            <p style="font-size: 6pt; font-weight: normal; color: #555; max-width: 150px; margin-left: auto; text-align: right;">*Phone must be on same local WiFi network as host to scan successfully.</p>
+        </div>
+    </div>
+    <!-- JS Loader -->
+    <div id="loader" class="loader-overlay hidden">
+        <div class="spinner"></div>
+        <h2>Analyzing Environment...</h2>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
